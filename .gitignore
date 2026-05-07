@@ -1,0 +1,26 @@
+# Secrets
+.env
+
+# Chroma / vector data
+chroma_data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Django
+*.sqlite3
+/staticfiles/
+/media/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

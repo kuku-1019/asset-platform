@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>资产管理系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 1200px; margin: 0 auto; padding: 20px; background: #f5f5f5;
+        }
+
+        h1 { color: #1a1a2e; margin-bottom: 20px; }
+
+        .card {
+            background: #fff; border-radius: 8px; padding: 20px;
+            margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .card h3 { margin-bottom: 12px; color: #1a1a2e; }
+
+        /* ── AI 分析卡片 ── */
+        .ai-input-row {
+            display: flex; gap: 10px; margin-bottom: 15px;
+        }
+        .ai-input-row input {
+            flex: 1; padding: 10px 14px; border: 1px solid #d0d0d0;
+            border-radius: 6px; font-size: 14px;
+        }
+        .ai-input-row input:focus {
+            outline: none; border-color: #6f42c1;
+            box-shadow: 0 0 0 2px rgba(111,66,193,0.15);
+        }
+
+        .btn { cursor: pointer; font-weight: 600; border: none; border-radius: 6px;
+               padding: 8px 16px; font-size: 14px; transition: opacity 0.2s; }
+        .btn:hover { opacity: 0.85; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-primary { background: #6f42c1; color: #fff; }
+        .btn-info { background: #17a2b8; color: #fff; }
+        .btn-add { background: #28a745; color: #fff; }
+        .btn-delete { color: #dc3545; background: none; border: 1px solid #dc3545;
+                      padding: 4px 10px; font-size: 12px; }
+
+        .btn-group { display: flex; gap: 8px; }
+
+        /* 图表容器 */
+        .charts-row {
+            display: none; gap: 16px; margin-top: 16px; margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .chart-box {
+            flex: 1; min-width: 280px; height: 320px;
+            background: #fafafa; border-radius: 6px; border: 1px solid #eee;
+        }
+
+        /* 分析文字 */
+        .analysis-box {
+            display: none; margin-top: 16px; background: #f8f9fa;
+            border-left: 5px solid #6f42c1; border-radius: 4px; padding: 16px;
+        }
+        .analysis-box pre {
+            white-space: pre-wrap; font-family: inherit; color: #333; line-height: 1.7;
+        }
+
+        .sources-box {
+            margin-top: 8px; font-size: 12px; color: #888;
+        }
+
+        /* 添加表单 */
+        .form-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+        input, select {
+            padding: 8px 12px; border: 1px solid #d0d0d0;
+            border-radius: 6px; font-size: 14px;
+        }
+        input:focus, select:focus {
+            outline: none; border-color: #6f42c1;
+            box-shadow: 0 0 0 2px rgba(111,66,193,0.15);
+        }
+
+        /* 表格 */
+        table {
+            width: 100%; table-layout: fixed; border-collapse: collapse;
+            background: #fff; border-radius: 8px; overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        th, td {
+            border: 1px solid #e0e0e0; padding: 10px 12px; text-align: left;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        th { background: #1a1a2e; color: #fff; font-weight: 600; }
+
+        .pagination { margin-top: 12px; display: flex; gap: 10px; align-items: center; }
+    </style>
+</head>
+<body>
+
+<h1>资产管理系统</h1>
+
+<!-- ══════════════════════════════════════════════════════════════
+     RAG 驱动的智能财务分析（合并原 AI 报告 + RAG 问答）
+     ══════════════════════════════════════════════════════════════ -->
+<div class="card">
+    <h3>智能财务分析</h3>
+    <p style="color:#666;margin-bottom:10px;">
+        输入自然语言问题，AI 将结合资产数据进行结构化分析并生成图表和报告。
+    </p>
+
+    <div class="ai-input-row">
+        <input id="ai_query" placeholder="例如：分析IT部门闲置资产，给出处置建议">
+        <div class="btn-group">
+            <button class="btn btn-primary" id="btn_analyze">开始分析</button>
+            <button class="btn btn-info" id="btn_overview">一键总览</button>
+        </div>
+    </div>
+
+    <!-- 图表区 -->
+    <div class="charts-row" id="charts_row">
+        <div class="chart-box" id="chart_status"></div>
+        <div class="chart-box" id="chart_department"></div>
+        <div class="chart-box" id="chart_category"></div>
+    </div>
+
+    <!-- 文字分析 -->
+    <div class="analysis-box" id="analysis_box">
+        <pre id="analysis_text"></pre>
+        <div class="sources-box" id="analysis_sources"></div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     资产索引管理
+     ══════════════════════════════════════════════════════════════ -->
+<div class="card">
+    <button class="btn btn-info" id="btn_reindex">重建向量索引</button>
+    <span style="color:#666;margin-left:10px;font-size:13px;" id="index_status"></span>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     添加资产
+     ══════════════════════════════════════════════════════════════ -->
+<div class="card">
+    <h3>添加资产</h3>
+    <div class="form-row">
+        <input id="name" placeholder="资产名称">
+        <input id="sn" placeholder="SN 编号">
+        <input type="number" id="price" placeholder="价格" step="0.01">
+        <select id="category"><option value="">选择分类</option></select>
+        <select id="department"><option value="">选择部门</option></select>
+        <select id="status">
+            <option value="待入库">待入库</option>
+            <option value="闲置中" selected>闲置中</option>
+            <option value="使用中">使用中</option>
+            <option value="维修中">维修中</option>
+            <option value="已报废">已报废</option>
+        </select>
+        <button class="btn btn-add" id="btn_add">添加资产</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     资产表格
+     ══════════════════════════════════════════════════════════════ -->
+<table>
+    <thead><tr>
+        <th style="width:15%">资产名称</th><th style="width:15%">序列号</th>
+        <th style="width:8%">价格</th><th style="width:8%">状态</th>
+        <th style="width:10%">部门</th><th style="width:8%">分类</th>
+        <th style="width:8%">使用人</th><th style="width:8%">操作</th>
+    </tr></thead>
+    <tbody id="asset_list"></tbody>
+</table>
+<div class="pagination">
+    <button id="btn_prev" disabled>上一页</button>
+    <span id="page_info"></span>
+    <button id="btn_next" disabled>下一页</button>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// 工具
+// ════════════════════════════════════════════════════════════════
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// ════════════════════════════════════════════════════════════════
+// 资产表格
+// ════════════════════════════════════════════════════════════════
+let previousUrl = null, nextUrl = null;
+
+function loadData(url) {
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            previousUrl = data.previous; nextUrl = data.next;
+            document.getElementById("btn_prev").disabled = !previousUrl;
+            document.getElementById("btn_next").disabled = !nextUrl;
+
+            const tbody = document.getElementById('asset_list');
+            tbody.innerHTML = '';
+            if (!data.results) return;
+            data.results.forEach(item => {
+                const dept = item.department ? item.department.name : '-';
+                const cat = item.category ? item.category.name : '-';
+                const owner = item.owner ? item.owner.username : '-';
+                tbody.innerHTML += `
+                <tr>
+                    <td>${item.name}</td><td>${item.sn}</td>
+                    <td>${item.price}</td><td>${item.status}</td>
+                    <td>${dept}</td><td>${cat}</td><td>${owner}</td>
+                    <td><button class="btn-delete" onclick="deleteAsset(${item.id})">删除</button></td>
+                </tr>`;
+            });
+        });
+}
+loadData('/api/assets/');
+
+document.getElementById('btn_next').addEventListener('click', () => { if (nextUrl) loadData(nextUrl); });
+document.getElementById('btn_prev').addEventListener('click', () => { if (previousUrl) loadData(previousUrl); });
+
+// 添加资产
+document.getElementById('btn_add').addEventListener('click', () => {
+    const name = document.getElementById('name').value;
+    const sn = document.getElementById('sn').value;
+    const price = document.getElementById('price').value;
+    const category = document.getElementById('category').value;
+    const department = document.getElementById('department').value;
+    const status = document.getElementById('status').value;
+
+    if (!name || !sn || !price || !category || !department) {
+        alert('请填写所有必填字段'); return;
+    }
+
+    fetch('/api/assets/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify({
+            name, sn, price, status,
+            category: parseInt(category),
+            department: parseInt(department),
+            purchase_date: new Date().toISOString().split('T')[0]
+        })
+    })
+    .then(r => { if (r.ok) { alert('添加成功'); location.reload(); } else { alert('添加失败'); } });
+});
+
+function deleteAsset(id) {
+    if (!confirm('确定要删除吗？')) return;
+    fetch(`/api/assets/${id}/`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    }).then(r => { if (r.ok) { alert('删除成功'); location.reload(); } else { alert('删除失败'); } });
+}
+
+// ════════════════════════════════════════════════════════════════
+// ECharts 图表管理
+// ════════════════════════════════════════════════════════════════
+const charts = {};
+
+function renderChart(domId, data, title) {
+    const dom = document.getElementById(domId);
+    if (!dom) return;
+
+    if (charts[domId]) charts[domId].dispose();
+
+    const chart = echarts.init(dom);
+    charts[domId] = chart;
+
+    const names = Object.keys(data);
+    const values = Object.values(data);
+
+    chart.setOption({
+        title: { text: title, left: 'center', textStyle: { fontSize: 13 } },
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { bottom: 5, textStyle: { fontSize: 11 } },
+        series: [{
+            type: 'pie', radius: ['35%', '65%'],
+            label: { fontSize: 11 },
+            data: names.map((k, i) => ({ name: k, value: values[i] }))
+        }],
+        color: ['#6f42c1','#28a745','#dc3545','#ffc107','#17a2b8','#6610f2','#fd7e14','#20c997']
+    });
+}
+
+// ════════════════════════════════════════════════════════════════
+// AI 分析（核心）
+// ════════════════════════════════════════════════════════════════
+function runAnalysis(query) {
+    const btnAnalyze = document.getElementById('btn_analyze');
+    const btnOverview = document.getElementById('btn_overview');
+    const chartsRow = document.getElementById('charts_row');
+    const analysisBox = document.getElementById('analysis_box');
+    const analysisText = document.getElementById('analysis_text');
+    const analysisSources = document.getElementById('analysis_sources');
+
+    btnAnalyze.disabled = true;
+    btnOverview.disabled = true;
+    btnAnalyze.innerText = '分析中...';
+    analysisText.innerText = '';
+    analysisSources.innerText = '';
+    chartsRow.style.display = 'none';
+    analysisBox.style.display = 'none';
+
+    fetch('/api/ai-report/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify({ query: query })
+    })
+    .then(r => r.json())
+    .then(data => {
+        // 图表
+        if (data.stats) {
+            const s = data.stats;
+            chartsRow.style.display = 'flex';
+            const chartDefs = [
+                ['chart_status', s.by_status, '状态分布'],
+                ['chart_department', s.by_department, '部门分布'],
+                ['chart_category', s.by_category, '分类分布'],
+            ];
+            chartDefs.forEach(([id, data, title]) => {
+                const dom = document.getElementById(id);
+                if (data && Object.keys(data).length) {
+                    dom.style.display = '';
+                    renderChart(id, data, title);
+                } else {
+                    dom.style.display = 'none';
+                }
+            });
+        }
+
+        // 文字分析
+        if (data.analysis) {
+            analysisText.innerText = data.analysis;
+            analysisBox.style.display = 'block';
+        }
+
+        // 检索来源
+        if (data.sources && data.sources.length > 0) {
+            const names = data.sources.map(s => s.name).filter(Boolean).join('、');
+            analysisSources.innerText = '相关资产: ' + (names || '无匹配');
+        }
+    })
+    .catch(err => {
+        analysisBox.style.display = 'block';
+        analysisText.innerText = '请求出错: ' + err;
+    })
+    .finally(() => {
+        btnAnalyze.disabled = false;
+        btnOverview.disabled = false;
+        btnAnalyze.innerText = '开始分析';
+    });
+}
+
+// 手动输入分析
+document.getElementById('btn_analyze').addEventListener('click', () => {
+    const q = document.getElementById('ai_query').value.trim();
+    if (!q) { alert('请输入分析问题'); return; }
+    runAnalysis(q);
+});
+
+// 一键总览
+document.getElementById('btn_overview').addEventListener('click', () => {
+    runAnalysis('请全面分析当前资产状况，包括各状态/部门/分类的分布，并给出运营建议');
+});
+
+// ════════════════════════════════════════════════════════════════
+// 向量索引
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btn_reindex').addEventListener('click', () => {
+    const btn = document.getElementById('btn_reindex');
+    const status = document.getElementById('index_status');
+    btn.disabled = true; btn.innerText = '索引重建中...'; status.innerText = '';
+
+    fetch('/api/reindex/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+    })
+    .then(r => r.json())
+    .then(data => { status.innerText = data.message || data.error || ''; })
+    .catch(err => { status.innerText = '失败: ' + err; })
+    .finally(() => { btn.disabled = false; btn.innerText = '重建向量索引'; });
+});
+
+// ════════════════════════════════════════════════════════════════
+// 初始化下拉框
+// ════════════════════════════════════════════════════════════════
+Promise.all([
+    fetch('/api/categories/').then(r => r.json()),
+    fetch('/api/departments/').then(r => r.json())
+]).then(([cats, depts]) => {
+    const catSel = document.getElementById('category');
+    (cats || []).forEach(c => { catSel.innerHTML += `<option value="${c.id}">${c.name}</option>`; });
+
+    const deptSel = document.getElementById('department');
+    (depts || []).forEach(d => { deptSel.innerHTML += `<option value="${d.id}">${d.name}</option>`; });
+});
+</script>
+
+</body>
+</html>
