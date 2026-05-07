@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from collections import defaultdict
 from typing import ClassVar, Dict, List, Optional
 
 from django.conf import settings

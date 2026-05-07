@@ -25,7 +25,10 @@ class UserSerializer(serializers.ModelSerializer):
 class AssetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Asset
-        fields = "__all__"
+        fields = [
+            "id", "name", "sn", "price", "purchase_date",
+            "status", "category", "department", "owner",
+        ]
 
     def to_representation(self, instance):
         response = super().to_representation(instance)
